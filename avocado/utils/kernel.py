@@ -90,17 +90,18 @@ class KernelBuild(object):
         if self.config_path is not None:
             dotconfig = os.path.join(self.linux_dir, '.config')
             shutil.copy(self.config_path, dotconfig)
+            build.make(self.linux_dir, extra_args='O=%s olddefconfig' % self.build_dir)
+        else:
+            build.make(self.linux_dir, extra_args='O=%s defconfig' % self.build_dir)
 
-    def build(self):
+    def build(self, build_target='', extra_args=''):
         """
         Build kernel from source.
         """
         log.info("Starting build the kernel")
-        if self.config_path is None:
-            build.make(self.linux_dir, extra_args='O=%s defconfig' % self.build_dir)
-        else:
-            build.make(self.linux_dir, extra_args='O=%s olddefconfig' % self.build_dir)
-        build.make(self.linux_dir, extra_args='O=%s' % self.build_dir)
+        build.make(self.linux_dir, extra_args='O=%s %s %s' % \
+                   (self.build_dir, extra_args, build_target), \
+                   allow_output_check = 'all')
 
     def __del__(self):
         shutil.rmtree(self.work_dir)
