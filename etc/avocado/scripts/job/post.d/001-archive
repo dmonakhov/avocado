@@ -1,0 +1,31 @@
+#! /bin/bash
+
+
+[ -z "$AVOCADO_JOB_LOGDIR" ] && exit 0
+
+HOST=`hostname`
+dname=`dirname $AVOCADO_JOB_LOGDIR`
+bname=`basename $AVOCADO_JOB_LOGDIR`
+ARCH_HOST="autotest.qa.sw.ru"
+ARCH_WEB_ROOT="http://$ARCH_HOST/avocado"
+ARCH_ROOT="/var/www/html/avocado"
+TMP=`mktemp -d`
+body="$AVOCADO_JOB_LOGDIR/email_report"
+type pxz &>/dev/null && xzcmd=pxz || xzcmd=xz
+
+tar c -C $dname $bname | $xzcmd > $AVOCADO_JOB_LOGDIR.tar.xz || exit 1
+ssh root@$ARCH_HOST "mkdir -p $ARCH_ROOT/$HOST/job-results"
+rsync -aq $AVOCADO_JOB_LOGDIR $AVOCADO_JOB_LOGDIR.tar.xz \
+    root@$ARCH_HOST:$ARCH_ROOT/$HOST/job-results/ || exit 1
+
+echo "JOB ID      : $AVOCADO_JOB_UNIQUE_ID" >> $body
+echo "JOB LOB     : $AVOCADO_JOB_LOGDIR" >> $body
+echo "JOB ARCHIVE : root@$ARCH_HOST:$ARCH_ROOT/$HOST/job-results/$bname.tar.xz" | tee -a $body
+echo "JOB LINK    : $ARCH_WEB_ROOT/$HOST/job-results/$bname" | tee -a $body
+if [ -f ${AVOCADO_JOB_LOGDIR}/html/results.html ]
+then
+    echo "JOB HTML    : $ARCH_WEB_ROOT/$HOST/job-results/$bname/html/results.html" | tee -a $body
+fi
+
+echo " " >> $body
+exit 0
