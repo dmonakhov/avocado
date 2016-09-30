@@ -22,6 +22,7 @@ class LinuxBuildTest(Test):
         if linux_config is not None:
             linux_config = os.path.join(self.datadir, linux_config)
 
+        #linux_config = '/devel/xfstests-bld.git/kernel-configs/ext4-x86_64-config-4.7'
         self.linux_build = kernel.KernelBuild(kernel_version,
                                               linux_config,
                                               self.srcdir,

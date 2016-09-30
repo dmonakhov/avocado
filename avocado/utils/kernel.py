@@ -21,7 +21,7 @@ import logging
 import tempfile
 from distutils.version import LooseVersion
 
-from . import asset, archive, build
+from . import asset, archive, build, git
 
 log = logging.getLogger('avocado.test')
 
@@ -46,6 +46,7 @@ class KernelBuild(object):
         :param data_dirs: list of directories to keep the downloaded kernel
         :return: None.
         """
+        self.git_repo = None
         self.version = version
         self.config_path = config_path
         if work_dir is None:
@@ -64,12 +65,15 @@ class KernelBuild(object):
                                               self.config_path,
                                               self.work_dir)
 
-    def download(self):
+    def download(self, full_url = None):
         """
         Download kernel source.
         """
-        self.kernel_file = self.SOURCE.format(version=self.version)
-        full_url = self.URL + self.SOURCE.format(version=self.version)
+        if full_url is None:
+            self.kernel_file = self.SOURCE.format(version=self.version)
+            full_url = self.URL + self.SOURCE.format(version=self.version)
+        
+        self.linux_dir = os.path.join(self.work_dir, 'linux-%s' % self.version)
         self.asset_path = asset.Asset(full_url, asset_hash=None,
                                       algorithm=None, locations=None,
                                       cache_dirs=self.data_dirs).fetch()
@@ -78,17 +82,53 @@ class KernelBuild(object):
         """
         Uncompress kernel source.
         """
-        log.info("Uncompressing tarball")
+        log.info("Uncompressing tarball %s -> %s" % (self.asset_path, self.work_dir))
         archive.extract(self.asset_path, self.work_dir)
 
+    def fetch_git_repo(self, uri, branch='master', lbranch=None, commit=None,
+                       base_uri=None):
+        self.linux_dir = os.path.join(self.work_dir, 'linux.git')
+        self.git_repo = git.GitRepoHelper(uri, branch, lbranch, commit, self.linux_dir,
+                         base_uri)
+        self.git_repo.execute()
+        self.version = self.git_repo.get_top_tag()
+
+    def git_repo(self, uri, branch='master', lbranch=None, commit=None,
+                       base_uri=None):
+        self.linux_dir = os.path.join(self.work_dir, 'linux.git')
+        self.git_repo = git.GitRepoHelper(uri, branch, lbranch, commit, self.linux_dir,
+                         base_uri)
+        self.git_repo.execute()
+        self.version = self.git_repo.get_top_tag()
+
+    def apply_mbox(self, mbox):
+        # TODO Implement mbox apply for git-less source.
+        if self.git_repo is None:
+            raise ValueError("Kernel.apply_mbox currently works only for git-src")
+
+        log.info("Apply mbox: %s", mbox)
+        self.git_repo.git_cmd("am %s" % mbox)
+
+        old_tag = self.version
+        self.version = self.git_repo.get_top_tag()
+        log.debug("New kernel tag is: %s", self.version)
+        self.git_repo.git_cmd("format-patch -o patch-queue %s..%s" % ( old_tag, self.version))
+        return  os.path.join(self.linux_dir, 'patch-queue')
+
+    def git_archive(self, arname):
+        # TODO Implement mbox apply for git-less source.
+        if self.git_repo is None:
+            raise ValueError("Kernel.apply_mbox currently works only for git-src")
+        cmd = "archive --prefix=linux-%s/ HEAD | gzip > %s " % (self.version, arname)
+        self.git_repo.git_cmd(cmd, shell=True)
+        
     def configure(self):
         """
         Configure/prepare kernel source to build.
         """
-        self.linux_dir = os.path.join(self.work_dir, 'linux-%s' % self.version)
         build.make(self.linux_dir, extra_args='O=%s mrproper' % self.build_dir)
         if self.config_path is not None:
-            dotconfig = os.path.join(self.linux_dir, '.config')
+            dotconfig = os.path.join(self.build_dir, '.config')
             shutil.copy(self.config_path, dotconfig)
             build.make(self.linux_dir, extra_args='O=%s olddefconfig' % self.build_dir)
         else:

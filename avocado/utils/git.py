@@ -76,23 +76,32 @@ class GitRepoHelper(object):
         the repo
         """
         if not os.path.exists(self.destination_dir):
-            logging.debug('Creating directory %s for git repo %s',
-                          self.destination_dir, self.uri)
-            os.makedirs(self.destination_dir)
+            if self.base_uri is not None:
+                logging.debug('Clone directory %s git repo %s',
+                          self.destination_dir, self.base_uri)
+                process.run("%s clone -q  -o local -b %s -n %s %s" %
+                             (self.cmd, self.branch, self.base_uri,
+                              self.destination_dir))
+                # Nothing to be done here
+                return
+            else:
+                logging.debug('Creating directory %s for git repo %s',
+                              self.destination_dir, self.uri)
+                os.makedirs(self.destination_dir)
 
         os.chdir(self.destination_dir)
         if os.path.exists('.git'):
             logging.debug('Resetting previously existing git repo at %s for '
                           'receiving git repo %s',
                           self.destination_dir, self.uri)
-            self.git_cmd('reset --hard')
+            self.git_cmd('reset -q --hard')
         else:
             logging.debug('Initializing new git repo at %s for receiving '
                           'git repo %s',
                           self.destination_dir, self.uri)
             self.git_cmd('init')
 
-    def git_cmd(self, cmd, ignore_status=False):
+    def git_cmd(self, cmd, ignore_status=False, shell=False):
         """
         Wraps git commands.
 
@@ -103,7 +112,7 @@ class GitRepoHelper(object):
         """
         os.chdir(self.destination_dir)
         return process.run(r"%s %s" % (self.cmd, astring.shell_escape(cmd)),
-                           ignore_status=ignore_status)
+                           ignore_status=ignore_status, shell=shell)
 
     def fetch(self, uri):
         """
@@ -144,7 +153,7 @@ class GitRepoHelper(object):
             branch = self.branch
 
         logging.debug('Checking out branch %s', branch)
-        self.git_cmd("checkout %s" % branch)
+        self.git_cmd("checkout -f %s" % branch)
 
         if commit is None:
             commit = self.commit
@@ -171,8 +180,7 @@ class GitRepoHelper(object):
         utility method.
         """
         self.init()
-        if self.base_uri is not None:
-            self.fetch(self.base_uri)
+
         self.fetch(self.uri)
         self.checkout()
 
