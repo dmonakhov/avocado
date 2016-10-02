@@ -54,6 +54,11 @@ class Multiplex(CLICmd):
         parser.add_argument('-c', '--contents', action='store_true',
                             default=False, help="Shows the node content "
                             "(variables)")
+        parser.add_argument('-l', '--list', action='store_true',
+                            default=False, help="Dump variants as yaml list")
+        parser.add_argument('--list-variant-id', action='store_true',
+                            default=False, help="Append variant id to list")
+
         parser.add_argument('--mux-inject', default=[], nargs='*',
                             help="Inject [path:]key:node values into "
                             "the final multiplex tree.")
@@ -115,6 +120,37 @@ class Multiplex(CLICmd):
             sys.exit(exit_codes.AVOCADO_ALL_OK)
 
         variants = multiplexer.MuxTree(mux_tree)
+        if args.list:
+            prefix = '  '
+            level = 0
+            if args.list_variant_id:
+                log.info("variant: !mux")
+                level = 1
+            for (index, tpl) in enumerate(variants):
+                lname = ''
+                for x in tpl:
+                    path = x.path[len('/run'):]
+                    lname += path.replace('/', '-')
+                # trim first '-'
+                lname = lname[1:]
+                if args.list_variant_id:
+                    log.info('%s%d:' % (prefix, index))
+                log.info('%s%s:' % (prefix * (level + 1), lname))
+                env = set()
+                for node in tpl:
+                    for key, value in node.environment.iteritems():
+                        origin = node.environment_origin[key].path
+                        env.add(("%s" % key, str(value)))
+                if not env:
+                    continue
+                fmt = '%s  %%-%ds: %%s' % (prefix * (level + 2),
+                                           max([len(_[0]) for _ in env]))
+                for record in sorted(env):
+                    log.info(fmt, *record)
+                log.info("")
+
+            sys.exit(exit_codes.AVOCADO_ALL_OK)
+
         log.info('Variants generated:')
         for (index, tpl) in enumerate(variants):
             if not args.debug:
