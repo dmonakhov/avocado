@@ -8,6 +8,7 @@ branches:
     only:
         - master
         - 36lts
+        - travis-test
 
 cache:
     directories:
