@@ -7,6 +7,7 @@ branches:
     only:
         - master
         - 36lts
+        - travis
 
 cache:
     directories:
